@@ -1,27 +1,45 @@
 import heapq
 import copy
-import time
+from itertools import count
 
 class SudokuSolverV2:
     def __init__(self, board):
         self.board = board
 
     def solve(self):
+        # Quick sanity: initial board must not violate rules
+        if not self.is_valid_board(self.board):
+            return None
+
+        temp = copy.deepcopy(self.board)
         heap = []
-        initial_state = (self.heuristic(self.board), 0, self.board)
-        heapq.heappush(heap, initial_state)
+        tie = count()  # tie-breaker so heap never compares boards
+        g0 = 0
+        h0 = self.heuristic(self.board)
+        heapq.heappush(heap, (g0 + h0, g0, next(tie), self.board))
 
         while heap:
-            f, g, curr_board = heapq.heappop(heap)
-            if self.is_goal(curr_board):
-                return curr_board
+            f, g, _, curr_board = heapq.heappop(heap)
 
-            i, j, candidates = self.select_mrv_cell(curr_board)
+            if self.is_goal(curr_board):
+                # Full board; return only if consistent with givens and valid
+                return curr_board if self.checker(temp, curr_board) else None
+
+            pick = self.select_mrv_cell(curr_board)
+            if pick is None:
+                # No empty cells but goal failed (invalid placement) -> skip
+                continue
+
+            i, j, candidates = pick
+            # If no candidates, this branch is a dead end (implicit prune)
             for num in candidates:
                 new_board = copy.deepcopy(curr_board)
                 new_board[i][j] = num
+                # PRUNE: skip states that violate row/col/box constraints
+                if not self.is_valid_board(new_board):
+                    continue
                 h = self.heuristic(new_board)
-                heapq.heappush(heap, (g + 1 + h, g + 1, new_board))
+                heapq.heappush(heap, (g + 1 + h, g + 1, next(tie), new_board))
         return None
 
     def select_mrv_cell(self, board):
@@ -35,7 +53,9 @@ class SudokuSolverV2:
                 if board[i][j] == 0:
                     candidates = self.get_candidates(board, i, j)
                     num_options = len(candidates)
-
+                    if num_options == 0:
+                        # Immediate dead end
+                        return (i, j, [])
                     if num_options < min_options:
                         min_options = num_options
                         best_cell = (i, j)
@@ -47,6 +67,9 @@ class SudokuSolverV2:
                             best_cell = (i, j)
                             best_candidates = candidates
                             best_neighbors = neighbors
+
+        if best_cell is None:
+            return None
         return (*best_cell, best_candidates)
 
     def count_unfilled_neighbors(self, board, row, col):
@@ -64,8 +87,7 @@ class SudokuSolverV2:
         return count
 
     def get_candidates(self, board, row, col):
-        used = set()
-        used.update(board[row])
+        used = set(board[row])
         used.update(board[i][col] for i in range(9))
         box_row, box_col = 3 * (row // 3), 3 * (col // 3)
         for i in range(box_row, box_row + 3):
@@ -74,7 +96,7 @@ class SudokuSolverV2:
         return [n for n in range(1, 10) if n not in used]
 
     def heuristic(self, board):
-        # Sum of the number of legal values for all empty cells
+        # Sum of domain sizes for all empty cells
         total = 0
         for i in range(9):
             for j in range(9):
@@ -85,50 +107,45 @@ class SudokuSolverV2:
     def is_goal(self, board):
         return all(all(cell != 0 for cell in row) for row in board)
 
-# function to check validity of solution
-def checker(board, solved):
-    row_used = [set() for i in range(9)]
-    col_used = [set() for i in range(9)]
-    box_used = [set() for i in range(9)]
-    for i in range(9):
-        for j in range(9):
-            curr = solved[i][j]
-            if curr in row_used[i]:
-                print(f"Repeat in row {i}")
+    def is_valid_board(self, board):
+        # Rows & cols (ignore zeros)
+        for i in range(9):
+            row_vals = [x for x in board[i] if x != 0]
+            if len(row_vals) != len(set(row_vals)):
                 return False
-            if curr in col_used[j]:
-                print(f"Repeat in col {j}")
+            col_vals = [board[r][i] for r in range(9) if board[r][i] != 0]
+            if len(col_vals) != len(set(col_vals)):
                 return False
-            if curr in box_used[3*(i//3)+j//3]:
-                print(f"Repeat in box {3*(i//3)+j//3}")
-                return False
-            if board[i][j] != 0 and board[i][j] != solved[i][j]:
-                print(f"Diff value in [{i},{j}]")
-                return False
-            row_used[i].add(curr)
-            col_used[j].add(curr)
-            box_used[3*(i//3)+j//3].add(curr)
-    return True
+        # 3x3 boxes
+        for br in range(0, 9, 3):
+            for bc in range(0, 9, 3):
+                box = []
+                for r in range(br, br + 3):
+                    for c in range(bc, bc + 3):
+                        v = board[r][c]
+                        if v != 0:
+                            box.append(v)
+                if len(box) != len(set(box)):
+                    return False
+        return True
 
-board = [
-    [8, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 3, 6, 0, 0, 0, 0, 0],
-    [0, 7, 0, 0, 9, 0, 2, 0, 0],
-    [0, 5, 0, 0, 0, 7, 0, 0, 0],
-    [0, 0, 0, 0, 4, 5, 7, 0, 0],
-    [0, 0, 0, 1, 0, 0, 0, 3, 0],
-    [0, 0, 1, 0, 0, 0, 0, 6, 8],
-    [0, 0, 8, 5, 0, 0, 0, 1, 0],
-    [0, 9, 0, 0, 0, 0, 4, 0, 0]
-]
+    # final checker — consistent with givens + full validity
+    def checker(self, board, solved):
+        row_used = [set() for _ in range(9)]
+        col_used = [set() for _ in range(9)]
+        box_used = [set() for _ in range(9)]
+        for i in range(9):
+            for j in range(9):
+                curr = solved[i][j]
+                if curr < 1 or curr > 9:
+                    return False
+                if curr in row_used[i] or curr in col_used[j] or curr in box_used[3*(i//3)+j//3]:
+                    return False
+                if board[i][j] != 0 and board[i][j] != solved[i][j]:
+                    return False
+                row_used[i].add(curr)
+                col_used[j].add(curr)
+                box_used[3*(i//3)+j//3].add(curr)
+        return True
 
-
-board2 = copy.deepcopy(board)
-
-curr = time.time()
-sudoku = SudokuSolverV2(board)
-solved = sudoku.solve()
-print(time.time()-curr)
-print(checker(board2, solved))
-print(solved)
 
