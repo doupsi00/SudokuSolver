@@ -76,27 +76,3 @@ class SudokuSolver:
                 col_used[j].add(curr)
                 box_used[3*(i//3)+j//3].add(curr)
         return True
-
-
-board = [
-    [8, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 3, 6, 0, 0, 0, 0, 0],
-    [0, 7, 0, 0, 9, 0, 2, 0, 0],
-    [0, 5, 0, 0, 0, 7, 0, 0, 0],
-    [0, 0, 0, 0, 4, 5, 7, 0, 0],
-    [0, 0, 0, 1, 0, 0, 0, 3, 0],
-    [0, 0, 1, 0, 0, 0, 0, 6, 8],
-    [0, 0, 8, 5, 0, 0, 0, 1, 0],
-    [0, 9, 0, 0, 0, 0, 4, 0, 0]
-]
-
-
-
-board2 = copy.deepcopy(board)
-curr = time.time()
-sudoku = SudokuSolver(board)
-solved = sudoku.solve()
-print(time.time()-curr)
-print(checker(board2, solved))
-for i in range(9):
-    print(solved[i])
